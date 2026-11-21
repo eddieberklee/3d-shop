@@ -27,8 +27,8 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
 
   // Physically based output: linear HDR lighting, filmic tone map, sRGB display.
   renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.toneMapping = THREE.AgXToneMapping
-  renderer.toneMappingExposure = 1
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 0.85
   renderer.shadowMap.enabled = true
 
   const scene = new THREE.Scene()

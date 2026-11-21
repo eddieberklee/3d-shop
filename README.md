@@ -1,6 +1,6 @@
 # 3d-shop
 
-A web app that is one full-screen, physically based 3D scene: an open-air mall walk in a Japandi style (plaster, pale oak, stone pavers, open sky) with a shop in each bay.
+A web app that is one full-screen, physically based 3D scene: an open-air Japandi shopping lane (cream plaster, honey oak, flat roofs with dark edges, noren curtains, lanterns, stone pavers, warm low sun) with a real shop in each bay.
 
 ## Controls
 
