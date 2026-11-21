@@ -72,6 +72,7 @@ export function createJourney(
     hallway.group.visible = true
     ui.back.hidden = true
     state.shop = null
+    room.onLeave?.()
   }
 
   const enterShop = async (shop: number, instant = false) => {

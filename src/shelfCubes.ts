@@ -21,6 +21,8 @@ export interface ShelfProduct {
   title: string
   /** For example "$58.00". Empty when the product has no price. */
   price: string
+  /** The shop's own checkout or product page for this product. Used unchanged. */
+  buyUrl: string | null
   /** The product photo as a JPEG data URL, or null when the photo did not load. */
   image: () => string | null
 }
@@ -135,6 +137,7 @@ export function createShelfCubes(stage: Stage, room: ShopRoom): ShelfCubes {
           id,
           title: product.title,
           price: priceLabel(product),
+          buyUrl: product.variants[0]?.checkout_url ?? product.variants[0]?.url ?? null,
           image: () => {
             try {
               return canvas?.toDataURL('image/jpeg', 0.9) ?? null

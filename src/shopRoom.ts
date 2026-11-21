@@ -27,6 +27,8 @@ export interface ShopRoom {
   setShop: (sign: ShopSign) => void
   /** Called when the camera comes into the room, with the shop's index. */
   onEnter?: (shop: number) => void
+  /** Called when the camera goes back to the hall. */
+  onLeave?: () => void
 }
 
 /** A wall display: a title over empty oak shelves. Products go here later. */

@@ -4,12 +4,44 @@ import type { ShelfProduct } from './shelfCubes'
 /**
  * The try-on panel: take a selfie with the device camera, then show a spinner
  * while the server (`/api/try-on`) makes a photo of the shopper with the
- * product. The selfie stays in this page's memory until the page closes.
+ * product. The selfie, the open product and its picture are kept in
+ * `sessionStorage` (this tab only, gone when the tab closes), so a page that
+ * loads again shows the same panel. Nothing else stores the selfie.
  */
 const SELFIE_MAX = 1024
 const REQUEST_TIMEOUT_MS = 160_000
 
-let selfie: string | null = null
+const SELFIE_KEY = 'tryon.selfie'
+const OPEN_KEY = 'tryon.open'
+
+function stored(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function store(key: string, value: string | null): void {
+  try {
+    if (value === null) sessionStorage.removeItem(key)
+    else sessionStorage.setItem(key, value)
+  } catch {
+    // Storage is full or off: the panel still works, but not across a reload.
+  }
+}
+
+/** What `OPEN_KEY` holds: the open product, its photo, and its picture when that is made. */
+interface OpenPanel {
+  id: string
+  title: string
+  price: string
+  buyUrl: string | null
+  photo: string | null
+  result: string | null
+}
+
+let selfie: string | null = stored(SELFIE_KEY)
 /** Finished pictures for the current selfie, by product id. */
 const results = new Map<string, string>()
 let close: (() => void) | null = null
@@ -38,15 +70,41 @@ function toJpeg(source: CanvasImageSource, width: number, height: number): strin
   return canvas.toDataURL('image/jpeg', 0.9)
 }
 
+/** After a page load: show the panel that was open before, with its picture. */
+export function restoreTryOn(): void {
+  try {
+    const saved = JSON.parse(stored(OPEN_KEY) ?? 'null') as OpenPanel | null
+    if (!saved?.id) return
+    if (saved.result && selfie) results.set(saved.id, saved.result)
+    openTryOn({ id: saved.id, title: saved.title, price: saved.price, buyUrl: saved.buyUrl, image: () => saved.photo })
+  } catch {
+    store(OPEN_KEY, null)
+  }
+}
+
 export function openTryOn(product: ShelfProduct): void {
   close?.()
+  const photo = product.image()
+  const save = (result: string | null) => {
+    const panel: OpenPanel = { id: product.id, title: product.title, price: product.price, buyUrl: product.buyUrl, photo, result }
+    store(OPEN_KEY, JSON.stringify(panel))
+  }
+  save(results.get(product.id) ?? null)
   const overlay = element('div', 'tryon')
   const card = element('div', 'tryon-card')
   const heading = element('div', 'tryon-heading')
   heading.append(element('div', 'tryon-title', product.title), element('div', 'tryon-price', product.price))
   const body = element('div', 'tryon-body')
   const actions = element('div', 'tryon-actions')
-  card.append(heading, body, actions)
+  // The buy button, under the picture. It opens the shop's own page; the URL is used unchanged.
+  const buy = element('a', 'tryon-buy', product.price ? `Buy · ${product.price}` : 'Buy')
+  buy.hidden = true
+  if (product.buyUrl) {
+    buy.href = product.buyUrl
+    buy.target = '_blank'
+    buy.rel = 'noopener'
+  }
+  card.append(heading, body, ...(product.buyUrl ? [buy] : []), actions)
   overlay.append(card)
   document.body.append(overlay)
 
@@ -70,6 +128,7 @@ export function openTryOn(product: ShelfProduct): void {
     window.removeEventListener('keydown', onKey, true)
     overlay.remove()
     close = null
+    store(OPEN_KEY, null)
   }
   close = shut
   window.addEventListener('keydown', onKey, true)
@@ -80,6 +139,7 @@ export function openTryOn(product: ShelfProduct): void {
   const show = (content: Node[], buttons: Node[]) => {
     body.replaceChildren(...content)
     actions.replaceChildren(...buttons, button('Close', shut))
+    buy.hidden = !body.querySelector('.tryon-picture')
   }
   const spinner = (label: string) => {
     const wrap = element('div', 'tryon-wait')
@@ -88,6 +148,8 @@ export function openTryOn(product: ShelfProduct): void {
   }
   const retake = () => {
     selfie = null
+    store(SELFIE_KEY, null)
+    save(null)
     results.clear()
     void camera()
   }
@@ -97,7 +159,6 @@ export function openTryOn(product: ShelfProduct): void {
     if (!taken) return
     const done = results.get(product.id)
     if (done) return result(done)
-    const photo = product.image()
     if (!photo) return show([element('div', 'tryon-note', 'The photo of this product did not load, so it cannot be tried on.')], [])
     show([spinner('Trying it on. This takes up to half a minute.')], [])
     request = new AbortController()
@@ -114,7 +175,10 @@ export function openTryOn(product: ShelfProduct): void {
       if (!open) return
       if (response.status === 404 || !isJson) throw new Error('Try-on is not available on this site yet.')
       if (!response.ok || !answer?.image) throw new Error(answer?.error || 'The try-on did not work.')
-      if (selfie === taken) results.set(product.id, answer.image)
+      if (selfie === taken) {
+        results.set(product.id, answer.image)
+        save(answer.image)
+      }
       result(answer.image)
     } catch (error) {
       if (!open) return
@@ -135,6 +199,7 @@ export function openTryOn(product: ShelfProduct): void {
   const useSelfie = (dataUrl: string) => {
     stopCamera()
     selfie = dataUrl
+    store(SELFIE_KEY, dataUrl)
     results.clear()
     void generate()
   }

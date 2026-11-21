@@ -8,7 +8,7 @@ import { orderShopsByModels } from './shopOrder'
 import { createShelfCubes } from './shelfCubes'
 import { buildShopRoom } from './shopRoom'
 import { createStage } from './stage'
-import { openTryOn } from './tryOn'
+import { openTryOn, restoreTryOn } from './tryOn'
 import { recordProductClick } from './clicks'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!
@@ -31,7 +31,23 @@ const journey = createJourney(stage, controls, hallway, room, {
 
 // Placeholder product cubes on the shop's shelf. A tap on one opens the try-on panel.
 const cubes = createShelfCubes(stage, room)
-room.onEnter = cubes.setShop
+// The page can load again while the shopper is in a shop (a phone that comes
+// back from its camera, or a new version of the page). The shop and the try-on
+// panel are kept for this tab, so the shopper comes back to the same place.
+const SHOP_KEY = 'shop'
+const remember = (shop: number | null) => {
+  try {
+    if (shop === null) sessionStorage.removeItem(SHOP_KEY)
+    else sessionStorage.setItem(SHOP_KEY, String(shop))
+  } catch {
+    // No storage (private mode): the shopper starts in the hall after a reload.
+  }
+}
+room.onEnter = (shop) => {
+  remember(shop)
+  cubes.setShop(shop)
+}
+room.onLeave = () => remember(null)
 const journeyTap = controls.onTap
 controls.onTap = (x, y) => {
   const product = journey.shop === null ? null : cubes.productAt(x, y)
@@ -54,6 +70,19 @@ SHOPS.slice(0, hallway.shopCount).forEach((shop, index) => {
     .then(({ url }: { url: string | null }) => url && hallway.setStorefront(index, shop.title, url))
     .catch(() => {})
 })
+
+const rememberedShop = (() => {
+  try {
+    const value = sessionStorage.getItem(SHOP_KEY)
+    return value === null ? null : Number(value)
+  } catch {
+    return null
+  }
+})()
+if (rememberedShop !== null && rememberedShop >= 0 && rememberedShop < hallway.shopCount && !location.search.includes('shop=')) {
+  await journey.enterShop(rememberedShop, true)
+  restoreTryOn()
+}
 
 if (document.fullscreenEnabled) {
   const toggleFullscreen = () => {

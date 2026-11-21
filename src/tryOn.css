@@ -111,3 +111,19 @@
   color: #fff;
   background: #2b2925;
 }
+
+.tryon-buy {
+  display: grid;
+  place-items: center;
+  min-height: 50px;
+  border-radius: 25px;
+  font-size: 17px;
+  font-weight: 500;
+  color: #fff;
+  background: #a9672f;
+  text-decoration: none;
+}
+
+.tryon-buy[hidden] {
+  display: none;
+}
