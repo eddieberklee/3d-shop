@@ -17,8 +17,10 @@ export interface PinnedShop {
   /** `seller.domain`: the value Shop MCP takes as `shop` for carts and checkouts. */
   domain: string
   /**
-   * The products on this shop's shelves, in shelf order: Shop MCP product ids
+   * The products on this shop's shelves: Shop MCP product ids
    * (`gid://shopify/p/{upid}`). Fetch their live data with `lookupCatalog`.
+   * Shelf order is by click count (`shelfOrder` in `src/clicks.ts`); this order
+   * breaks ties, so with no clicks it is the shelf order.
    */
   products: string[]
 }

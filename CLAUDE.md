@@ -8,4 +8,5 @@
 - Shops: `src/journey.ts` runs the tap, enter and exit animation; `src/shopRoom.ts` builds the one shared shop room. Control modes are `hall`, `shop` and `cinematic` (`src/controls.ts`).
 - Dev-only URL parameters for visual checks: `?view=z,yaw,pitch`, `?shop=7&yaw=90`, `?door=7,0.6`, `?tap=x,y`.
 - Shops and their shelf products are fixed in `src/shopList.ts` (same shops, same order, each visit). Do not replace it with a live search. Dev-server endpoints are Vite plugins in `server/`.
+- Shelf order follows click counts. Fill a shop's shelf slots in `shelfOrder(shop)` order and call `recordProductClick(id)` when a product is tapped (`src/clicks.ts`). `server/productClicks.ts` keeps the counts in `.data/product-clicks.json` (git-ignored). Clicks change the order only, never which products a shop has.
 - Secrets: `.env.local` (git-ignored) holds `GEMINI_API_KEY`. Read it only in `server/` or `scripts/`, never in `src/`, and never print it.

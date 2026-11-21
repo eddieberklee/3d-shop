@@ -23,6 +23,7 @@ A web app that is one full-screen, physically based 3D scene: an open-air mall w
 
 - `src/shopList.ts` fixes which 28 shops stand in the hall, their order, and the six products on each shop's shelves. Names, prices and images still come live from Shop MCP.
 - `server/shopLogo.ts` (dev server) finds each shop's site icon; the browser loads it from the shop's own server.
+- `server/productClicks.ts` (dev server) counts clicks on each pinned product. `src/clicks.ts` puts the most-clicked products first on the shelves; with no counts, the pinned order is the shelf order.
 - `searchCatalog`, `lookupCatalog`, `getProduct`: products, prices, images and sellers from all Shopify merchants.
 - `createCheckout`, `getCheckout`: a real checkout at one merchant. The shopper pays on its `continue_url`.
 
