@@ -1,6 +1,8 @@
 /**
- * The shops in the hall, in hall order: index 0 is the first shop on the left,
- * index 1 the first on the right, and so on.
+ * The shops in the hall. This is the pinned order: index 0 is the first shop on
+ * the left, index 1 the first on the right, and so on. At page load,
+ * `orderShopsByModels` (`src/shopOrder.ts`) moves the shops with the most
+ * generated 3D models to the front; ties keep this order.
  *
  * This list is fixed on purpose, so the same shops stand in the same places on
  * each visit. Only identities are stored here: the shop, and which of its

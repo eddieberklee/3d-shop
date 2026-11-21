@@ -4,6 +4,7 @@ import { createWalkControls } from './controls'
 import { buildHallway } from './hallway'
 import { createJourney } from './journey'
 import { SHOPS } from './shopList'
+import { orderShopsByModels } from './shopOrder'
 import { createShelfCubes } from './shelfCubes'
 import { buildShopRoom } from './shopRoom'
 import { createStage } from './stage'
@@ -44,6 +45,8 @@ controls.onTap = (x, y) => {
 // "Add to Home Screen" opens the app with no browser bars.
 // Real shops, in a fixed order. Each name goes up at once; each logo is found
 // live on the shop's own site and added when it loads.
+// The shops with the most generated 3D models stand nearest the start.
+await orderShopsByModels()
 SHOPS.slice(0, hallway.shopCount).forEach((shop, index) => {
   hallway.setStorefront(index, shop.title)
   fetch(`/api/shop-logo?url=${encodeURIComponent(shop.url)}`)
