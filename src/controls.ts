@@ -16,6 +16,8 @@ const WALK_PER_SCREEN = 14
 const FRICTION = 4
 /** Metres per second. */
 const MAX_SPEED = 12
+/** A swipe across the full screen width turns the view this far. */
+const YAW_PER_SCREEN = 150 * DEG
 const EYE_HEIGHT = 1.6
 
 export interface WalkControls {
@@ -126,7 +128,7 @@ export function createWalkControls(
     } else {
       // The view follows the finger, as if you drag the scene.
       const radiansPerPixel = (camera.fov * DEG) / canvas.clientHeight
-      state.yaw += dx * radiansPerPixel
+      state.yaw += (dx / canvas.clientWidth) * YAW_PER_SCREEN
       state.pitch += dy * radiansPerPixel
     }
     apply()

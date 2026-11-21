@@ -1,10 +1,10 @@
 # 3d-shop
 
-A web app that is one full-screen, physically based 3D scene: a mall hallway with a shop in each bay.
+A web app that is one full-screen, physically based 3D scene: an open-air mall walk in a Japandi style (plaster, pale oak, stone pavers, open sky) with a shop in each bay.
 
 ## Controls
 
-- Swipe left or right: look around (limit 75° each side).
+- Swipe left or right: look around (limit 75° each side; one full-width swipe turns 150°).
 - Swipe up or down while turned: look up or down (you cannot look straight down).
 - Swipe down while you face along the hall: walk forward. Swipe up: walk back.
 - Desktop: drag, scroll wheel, or `W` `A` `S` `D` and the arrow keys.

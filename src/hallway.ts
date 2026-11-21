@@ -1,16 +1,21 @@
 import * as THREE from 'three/webgpu'
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+import { SkyMesh } from 'three/addons/objects/SkyMesh.js'
 import type { Stage } from './stage'
 
 /** All sizes are metres. The hall runs from z = 0 to z = -LENGTH. */
 const WIDTH = 8
-const HEIGHT = 5
+const HEIGHT = 4.6
 const BAY = 7
 const BAYS_PER_SIDE = 14
 const LENGTH = BAY * BAYS_PER_SIDE
 const FRONT_WIDTH = 6
 const FRONT_HEIGHT = 4.2
-const HAZE = 0xe9e6e0
+const HAZE = 0xe6ddd0
+/** Degrees above the horizon, and degrees around from the hall axis. */
+const SUN_ELEVATION = 48
+const SUN_AZIMUTH = 28
+const SUN_INTENSITY = 2.2
+const ENVIRONMENT_INTENSITY = 0.18
 
 export interface Hallway {
   /** The camera can move between these z positions. */
@@ -22,125 +27,200 @@ export interface Hallway {
   setStorefrontImage: (shop: number, url: string) => void
 }
 
-function tileTexture(): THREE.CanvasTexture {
+function canvasTexture(width: number, height: number, draw: (g: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = 512
-  const g = canvas.getContext('2d')!
-  g.fillStyle = '#d9d5cd'
-  g.fillRect(0, 0, 512, 512)
-  g.strokeStyle = '#b9b4aa'
-  g.lineWidth = 3
-  g.strokeRect(0, 0, 512, 512)
+  canvas.width = width
+  canvas.height = height
+  draw(canvas.getContext('2d')!)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = 8
+  return texture
+}
+
+/** Large warm limestone pavers with a soft mottle. */
+function paverTexture(): THREE.CanvasTexture {
+  const texture = canvasTexture(512, 512, (g) => {
+    g.fillStyle = '#d6cdbd'
+    g.fillRect(0, 0, 512, 512)
+    for (let i = 0; i < 900; i++) {
+      const shade = Math.random() > 0.5 ? 255 : 90
+      g.fillStyle = `rgba(${shade},${shade - 8},${shade - 20},0.035)`
+      g.fillRect(Math.random() * 512, Math.random() * 512, 6 + Math.random() * 40, 4 + Math.random() * 14)
+    }
+    g.strokeStyle = '#b3a892'
+    g.lineWidth = 3
+    g.strokeRect(0, 0, 512, 512)
+  })
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(WIDTH, LENGTH)
-  texture.anisotropy = 8
+  texture.repeat.set(WIDTH / 2, LENGTH / 2)
   return texture
 }
 
-/** Placeholder storefront: a sign band above a lit window. */
+/** Pale oak with a vertical grain. */
+function oakTexture(): THREE.CanvasTexture {
+  const texture = canvasTexture(256, 1024, (g) => {
+    g.fillStyle = '#b98d5c'
+    g.fillRect(0, 0, 256, 1024)
+    for (let i = 0; i < 140; i++) {
+      const x = Math.random() * 256
+      g.strokeStyle = `rgba(${Math.random() > 0.5 ? '92,62,30' : '238,210,170'},${0.05 + Math.random() * 0.12})`
+      g.lineWidth = 0.5 + Math.random() * 2
+      g.beginPath()
+      g.moveTo(x, 0)
+      g.bezierCurveTo(x + 6, 340, x - 6, 680, x + 3, 1024)
+      g.stroke()
+    }
+  })
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  return texture
+}
+
+/** Muted earth tones for the placeholder shop fronts. */
+const NOREN = ['#a8ad98', '#c4a58c', '#d9cfbd', '#8e9aa0', '#b7b0a1', '#9c8f7e', '#c9b9a0', '#7f8b7a']
+
+/** Placeholder storefront: an oak sign band above a linen-toned window. */
 function placeholderTexture(shop: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 1024
-  canvas.height = 716
-  const g = canvas.getContext('2d')!
-  const hue = (shop * 47) % 360
-  const name = `SHOP ${String(shop + 1).padStart(2, '0')}`
+  return canvasTexture(1024, 716, (g) => {
+    const name = `SHOP ${String(shop + 1).padStart(2, '0')}`
 
-  g.fillStyle = '#17171a'
-  g.fillRect(0, 0, 1024, 716)
-  g.fillStyle = '#fff'
-  g.font = '600 72px system-ui, sans-serif'
-  g.textAlign = 'center'
-  g.textBaseline = 'middle'
-  g.fillText(name, 512, 80)
+    g.fillStyle = '#efe8db'
+    g.fillRect(0, 0, 1024, 716)
 
-  const glow = g.createLinearGradient(0, 160, 0, 716)
-  glow.addColorStop(0, `hsl(${hue} 45% 78%)`)
-  glow.addColorStop(1, `hsl(${hue} 40% 52%)`)
-  g.fillStyle = glow
-  g.fillRect(40, 160, 944, 516)
-  g.fillStyle = 'rgba(255,255,255,0.35)'
-  g.fillRect(40, 160, 944, 10)
+    g.fillStyle = '#2b2925'
+    g.font = '300 58px "Helvetica Neue", system-ui, sans-serif'
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.letterSpacing = '14px'
+    g.fillText(name, 512, 84)
 
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.anisotropy = 8
-  return texture
+    // The window: a recessed opening with a thin dark frame and a paper screen grid.
+    g.fillStyle = '#2b2925'
+    g.fillRect(60, 160, 904, 556)
+    const tone = g.createLinearGradient(0, 170, 0, 716)
+    tone.addColorStop(0, NOREN[shop % NOREN.length])
+    tone.addColorStop(1, '#efe6d6')
+    g.fillStyle = tone
+    g.fillRect(70, 170, 884, 546)
+    g.strokeStyle = 'rgba(43,41,37,0.55)'
+    g.lineWidth = 4
+    for (let i = 1; i < 4; i++) {
+      g.beginPath()
+      g.moveTo(70 + (884 * i) / 4, 170)
+      g.lineTo(70 + (884 * i) / 4, 716)
+      g.stroke()
+    }
+    g.beginPath()
+    g.moveTo(70, 330)
+    g.lineTo(954, 330)
+    g.stroke()
+  })
 }
 
-export function buildHallway({ scene, renderer, invalidate }: Stage): Hallway {
+export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Hallway {
   const hall = new THREE.Group()
   hall.name = 'hallway'
   scene.add(hall)
 
-  // Light: an image-based room light for soft reflections, and a bright haze
-  // that hides the far end of the hall.
-  const pmrem = new THREE.PMREMGenerator(renderer)
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-  scene.environmentIntensity = 1.6
-  scene.background = new THREE.Color(HAZE)
-  scene.fog = new THREE.Fog(HAZE, 25, LENGTH * 0.95)
+  // Open sky: a physical atmosphere with a low, warm sun. The same sky lights
+  // the scene through its reflection map.
+  const sun = new THREE.Vector3().setFromSphericalCoords(
+    1,
+    THREE.MathUtils.degToRad(90 - SUN_ELEVATION),
+    THREE.MathUtils.degToRad(SUN_AZIMUTH),
+  )
+  const sky = new SkyMesh()
+  sky.scale.setScalar(900)
+  sky.turbidity.value = 4
+  sky.rayleigh.value = 1.2
+  sky.mieCoefficient.value = 0.004
+  sky.mieDirectionalG.value = 0.85
+  sky.cloudCoverage.value = 0.25
+  sky.sunPosition.value.copy(sun)
+  camera.far = 2000
+  camera.updateProjectionMatrix()
+
+  const skyScene = new THREE.Scene()
+  skyScene.add(sky)
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(skyScene, 0, 1, 2000).texture
+  scene.environmentIntensity = ENVIRONMENT_INTENSITY
+  scene.add(sky)
+  scene.fog = new THREE.Fog(HAZE, 40, LENGTH * 1.3)
+
+  const sunLight = new THREE.DirectionalLight(0xfff0dc, SUN_INTENSITY)
+  sunLight.position.copy(sun).multiplyScalar(80).add(new THREE.Vector3(0, 0, -LENGTH / 2))
+  sunLight.target.position.set(0, 0, -LENGTH / 2)
+  sunLight.castShadow = true
+  sunLight.shadow.mapSize.set(4096, 4096)
+  sunLight.shadow.camera.left = -LENGTH / 2 - 4
+  sunLight.shadow.camera.right = LENGTH / 2 + 4
+  sunLight.shadow.camera.top = 14
+  sunLight.shadow.camera.bottom = -14
+  sunLight.shadow.camera.near = 1
+  sunLight.shadow.camera.far = 200
+  sunLight.shadow.bias = -0.0004
+  sunLight.shadow.normalBias = 0.03
+  // Warm bounce light, so the shade is not sky-blue.
+  scene.add(sunLight, sunLight.target, new THREE.HemisphereLight(0xfff1dc, 0xd2b890, 0.9))
 
   const midZ = -LENGTH / 2
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(WIDTH, LENGTH),
-    new THREE.MeshStandardMaterial({ map: tileTexture(), roughness: 0.18, metalness: 0 }),
+    new THREE.MeshStandardMaterial({ map: paverTexture(), roughness: 0.62, metalness: 0 }),
   )
   floor.rotation.x = -Math.PI / 2
   floor.position.z = midZ
+  floor.receiveShadow = true
   hall.add(floor)
 
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(WIDTH, LENGTH),
-    new THREE.MeshStandardMaterial({ color: 0xf4f2ee, roughness: 0.9 }),
-  )
-  ceiling.rotation.x = Math.PI / 2
-  ceiling.position.set(0, HEIGHT, midZ)
-  hall.add(ceiling)
-
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xece9e3, roughness: 0.7 })
+  // Plaster walls with an oak cap along the top.
+  const plaster = new THREE.MeshStandardMaterial({ color: 0xebe3d5, roughness: 0.95 })
+  const oakMap = oakTexture()
+  const oak = new THREE.MeshStandardMaterial({ map: oakMap, roughness: 0.55 })
   for (const side of [-1, 1]) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(LENGTH, HEIGHT), wallMaterial)
-    wall.rotation.y = -side * (Math.PI / 2)
-    wall.position.set(side * (WIDTH / 2), HEIGHT / 2, midZ)
-    hall.add(wall)
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, HEIGHT, LENGTH), plaster)
+    wall.position.set(side * (WIDTH / 2 + 0.2), HEIGHT / 2, midZ)
+    wall.castShadow = wall.receiveShadow = true
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.14, LENGTH), oak)
+    cap.position.set(side * (WIDTH / 2 + 0.1), HEIGHT + 0.07, midZ)
+    cap.castShadow = true
+    hall.add(wall, cap)
   }
 
-  // Ceiling light strips and wall pillars: one draw call for each kind.
-  const strips = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(0.5, 0.04, BAY * 0.6),
-    new THREE.MeshBasicMaterial({ color: 0xffffff }),
-    BAYS_PER_SIDE,
+  // Slim oak posts between the shops: one draw call.
+  const posts = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.16, HEIGHT, 0.16),
+    oak,
+    (BAYS_PER_SIDE + 1) * 2 * 3,
   )
-  const pillars = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(0.24, HEIGHT, BAY - FRONT_WIDTH),
-    new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.4, metalness: 0.6 }),
-    (BAYS_PER_SIDE + 1) * 2,
-  )
+  posts.castShadow = posts.receiveShadow = true
   const matrix = new THREE.Matrix4()
-  for (let bay = 0; bay < BAYS_PER_SIDE; bay++) {
-    strips.setMatrixAt(bay, matrix.makeTranslation(0, HEIGHT - 0.02, -(bay + 0.5) * BAY))
-  }
+  let post = 0
   for (let i = 0; i <= BAYS_PER_SIDE; i++) {
-    pillars.setMatrixAt(i * 2, matrix.makeTranslation(-WIDTH / 2 + 0.12, HEIGHT / 2, -i * BAY))
-    pillars.setMatrixAt(i * 2 + 1, matrix.makeTranslation(WIDTH / 2 - 0.12, HEIGHT / 2, -i * BAY))
+    for (const side of [-1, 1]) {
+      for (const offset of [-0.3, 0, 0.3]) {
+        posts.setMatrixAt(
+          post++,
+          matrix.makeTranslation(side * (WIDTH / 2 - 0.1), HEIGHT / 2, -i * BAY + offset),
+        )
+      }
+    }
   }
-  hall.add(strips, pillars)
+  hall.add(posts)
 
   // Storefronts: one image plane for each shop.
   const frontGeometry = new THREE.PlaneGeometry(FRONT_WIDTH, FRONT_HEIGHT)
-  const fronts: THREE.MeshBasicMaterial[] = []
+  const fronts: THREE.MeshStandardMaterial[] = []
   for (let shop = 0; shop < BAYS_PER_SIDE * 2; shop++) {
     const side = shop % 2 === 0 ? -1 : 1
     const bay = Math.floor(shop / 2)
-    const material = new THREE.MeshBasicMaterial({ map: placeholderTexture(shop) })
+    const material = new THREE.MeshStandardMaterial({ map: placeholderTexture(shop), roughness: 0.9 })
     const front = new THREE.Mesh(frontGeometry, material)
     front.name = `shop-${shop}`
     front.rotation.y = -side * (Math.PI / 2)
     front.position.set(side * (WIDTH / 2 - 0.02), FRONT_HEIGHT / 2, -(bay + 0.5) * BAY)
+    front.receiveShadow = true
     hall.add(front)
     fronts.push(material)
   }
