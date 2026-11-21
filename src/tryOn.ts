@@ -1,5 +1,6 @@
 import './tryOn.css'
 import type { ShelfProduct } from './shelfCubes'
+import { createCheckout } from './shop'
 
 /**
  * The try-on panel: take a selfie with the device camera, then show a spinner
@@ -37,6 +38,7 @@ interface OpenPanel {
   title: string
   price: string
   buyUrl: string | null
+  checkout: ShelfProduct['checkout']
   photo: string | null
   result: string | null
 }
@@ -76,17 +78,29 @@ export function restoreTryOn(): void {
     const saved = JSON.parse(stored(OPEN_KEY) ?? 'null') as OpenPanel | null
     if (!saved?.id) return
     if (saved.result && selfie) results.set(saved.id, saved.result)
-    openTryOn({ id: saved.id, title: saved.title, price: saved.price, buyUrl: saved.buyUrl, image: () => saved.photo })
+    openTryOn(
+      { id: saved.id, title: saved.title, price: saved.price, buyUrl: saved.buyUrl, checkout: saved.checkout ?? null, image: () => saved.photo },
+      true,
+    )
   } catch {
     store(OPEN_KEY, null)
   }
 }
 
-export function openTryOn(product: ShelfProduct): void {
+/**
+ * Open the panel for a product. Each tap on a product takes a new selfie;
+ * `restored` (after a page load) shows the picture that was there before.
+ */
+export function openTryOn(product: ShelfProduct, restored = false): void {
   close?.()
+  if (!restored) {
+    selfie = null
+    store(SELFIE_KEY, null)
+    results.clear()
+  }
   const photo = product.image()
   const save = (result: string | null) => {
-    const panel: OpenPanel = { id: product.id, title: product.title, price: product.price, buyUrl: product.buyUrl, photo, result }
+    const panel: OpenPanel = { id: product.id, title: product.title, price: product.price, buyUrl: product.buyUrl, checkout: product.checkout, photo, result }
     store(OPEN_KEY, JSON.stringify(panel))
   }
   save(results.get(product.id) ?? null)
@@ -104,7 +118,33 @@ export function openTryOn(product: ShelfProduct): void {
     buy.target = '_blank'
     buy.rel = 'noopener'
   }
-  card.append(heading, body, ...(product.buyUrl ? [buy] : []), actions)
+  // A tap makes a checkout at the shop (Shop MCP) and opens its `continue_url`,
+  // where the shopper reviews and pays. If that fails, the link above opens.
+  const label = buy.textContent
+  let buying = false
+  buy.addEventListener('click', (event) => {
+    const item = product.checkout
+    if (!item) return
+    event.preventDefault()
+    if (buying) return
+    buying = true
+    buy.textContent = 'Opening checkout…'
+    // The tab opens now, in the tap itself: a browser blocks a tab opened later.
+    const tab = window.open('', '_blank')
+    if (tab) tab.opener = null
+    const go = (url: string) => {
+      if (tab && !tab.closed) tab.location.href = url
+      else location.href = url
+    }
+    createCheckout(item.shop, [{ variantId: item.variantId, quantity: 1 }])
+      .then((checkout) => go(checkout.continue_url))
+      .catch(() => (product.buyUrl ? go(product.buyUrl) : tab?.close()))
+      .finally(() => {
+        buying = false
+        buy.textContent = label
+      })
+  })
+  card.append(heading, body, ...(product.buyUrl || product.checkout ? [buy] : []), actions)
   overlay.append(card)
   document.body.append(overlay)
 
