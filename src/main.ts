@@ -4,8 +4,11 @@ import { createWalkControls } from './controls'
 import { buildHallway } from './hallway'
 import { createJourney } from './journey'
 import { SHOPS } from './shopList'
+import { createShelfCubes } from './shelfCubes'
 import { buildShopRoom } from './shopRoom'
 import { createStage } from './stage'
+import { openTryOn } from './tryOn'
+import { recordProductClick } from './clicks'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!
 const stage = await createStage(canvas)
@@ -24,6 +27,17 @@ const journey = createJourney(stage, controls, hallway, room, {
   fade: document.querySelector<HTMLElement>('#fade')!,
   back: document.querySelector<HTMLButtonElement>('#back')!,
 })
+
+// Placeholder product cubes on the shop's shelf. A tap on one opens the try-on panel.
+const cubes = createShelfCubes(stage, room)
+room.onEnter = cubes.setShop
+const journeyTap = controls.onTap
+controls.onTap = (x, y) => {
+  const product = journey.shop === null ? null : cubes.productAt(x, y)
+  if (!product) return journeyTap?.(x, y)
+  recordProductClick(product.id)
+  openTryOn(product)
+}
 
 // Full screen: a button and the F key where the browser has the Fullscreen API
 // (desktop, Android, iPad). Esc leaves it. iPhone Safari has no such API: there,

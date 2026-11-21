@@ -61,6 +61,7 @@ export function createJourney(
 
   const showRoom = (shop: number) => {
     room.setShop(hallway.shopSign(shop))
+    room.onEnter?.(shop)
     hallway.group.visible = false
     room.group.visible = true
     ui.back.hidden = false

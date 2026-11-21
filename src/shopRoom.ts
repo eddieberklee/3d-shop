@@ -25,6 +25,8 @@ export interface ShopRoom {
   exitTargets: THREE.Object3D[]
   /** Show which shop this room is. */
   setShop: (sign: ShopSign) => void
+  /** Called when the camera comes into the room, with the shop's index. */
+  onEnter?: (shop: number) => void
 }
 
 /** A wall display: a title over empty oak shelves. Products go here later. */
