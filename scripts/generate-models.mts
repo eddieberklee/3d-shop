@@ -47,7 +47,10 @@ const limit = Number(args.get('limit') ?? 99)
 const models = (args.get('models') ?? 'neon,argon').split(',').filter((name) => MODEL_IDS[name])
 const force = args.has('force')
 const concurrency = Number(args.get('concurrency') ?? 4)
-/** `--thinking low|medium|high`: how long the 3D models may think. Unset = the model's default. */
+/**
+ * `--thinking low|medium|high`: how long Neon may think. Unset = its default,
+ * which takes about 5 minutes for each product; `low` takes about 1 minute.
+ */
 const thinking = args.get('thinking')
 
 const key = (await readFile(path.join(ROOT, '.env.local'), 'utf8')).match(/^GEMINI_API_KEY=(.*)$/m)?.[1].trim()
@@ -188,7 +191,7 @@ async function buildModel(name: string, title: string, cutout: { mimeType: strin
     [{ inlineData: cutout }, { text: SPEC_PROMPT(title) }],
     {
       responseMimeType: 'application/json',
-      ...(thinking ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
+      ...(thinking && name === 'neon' ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
     },
     SPEC_TIMEOUT,
   )
