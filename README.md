@@ -40,3 +40,8 @@ Add `?webgl` to the URL to force the WebGL 2 backend. The active backend is in `
 ## License
 
 MIT. Copy, change, and use it for any purpose, including commercial use. See [LICENSE](LICENSE).
+
+## Journal
+
+### 2026-11-21 17:00 — Live on Cloudflare at https://3d-shop.icon-generator-edlee.workers.dev
+<img src="docs/journal/2026-11-21-cloudflare-live.png" width="480">
