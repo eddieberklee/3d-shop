@@ -38,10 +38,6 @@ function toJpeg(source: CanvasImageSource, width: number, height: number): strin
   return canvas.toDataURL('image/jpeg', 0.9)
 }
 
-export function isTryOnOpen(): boolean {
-  return close !== null
-}
-
 export function openTryOn(product: ShelfProduct): void {
   close?.()
   const overlay = element('div', 'tryon')
@@ -77,7 +73,9 @@ export function openTryOn(product: ShelfProduct): void {
   }
   close = shut
   window.addEventListener('keydown', onKey, true)
-  overlay.addEventListener('click', (event) => event.target === overlay && shut())
+  // A touch tap sends a late click to the same place. Ignore it, or the panel would close at once.
+  const openedAt = performance.now()
+  overlay.addEventListener('click', (event) => event.target === overlay && performance.now() - openedAt > 500 && shut())
 
   const show = (content: Node[], buttons: Node[]) => {
     body.replaceChildren(...content)
@@ -101,7 +99,7 @@ export function openTryOn(product: ShelfProduct): void {
     if (done) return result(done)
     const photo = product.image()
     if (!photo) return show([element('div', 'tryon-note', 'The photo of this product did not load, so it cannot be tried on.')], [])
-    show([spinner('Trying it on. This takes about 15 seconds.')], [])
+    show([spinner('Trying it on. This takes up to half a minute.')], [])
     request = new AbortController()
     const timer = window.setTimeout(() => request?.abort(), REQUEST_TIMEOUT_MS)
     try {
