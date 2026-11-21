@@ -56,6 +56,24 @@ const thinking = args.get('thinking')
 const key = (await readFile(path.join(ROOT, '.env.local'), 'utf8')).match(/^GEMINI_API_KEY=(.*)$/m)?.[1].trim()
 if (!key) throw new Error('GEMINI_API_KEY is not in .env.local')
 
+/** One shared connection pool: many parallel calls must not each open a new connection. */
+const agent = new https.Agent({ keepAlive: true, maxSockets: 48 })
+
+/** Try a network step again after a connection error, a rate limit or a server error. */
+async function retry<T>(step: () => Promise<T>): Promise<T> {
+  const waits = [3000, 10_000, 30_000, 60_000]
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await step()
+    } catch (error) {
+      const text = `${error} ${(error as { cause?: unknown }).cause ?? ''}`
+      const temporary = /fetch failed|AggregateError|ECONN|ETIMEDOUT|EAI_AGAIN|socket|HTTP (429|5\d\d)|overloaded|no answer in/i.test(text)
+      if (!temporary || attempt >= waits.length) throw error
+      await new Promise((resolve) => setTimeout(resolve, waits[attempt] * (0.7 + Math.random() * 0.6)))
+    }
+  }
+}
+
 type Part = { text?: string; inlineData?: { mimeType: string; data: string } }
 
 /**
@@ -82,7 +100,7 @@ async function gemini(model: string, parts: Part[], generationConfig: object, ti
   await new Promise<void>((resolve, reject) => {
     const request = https.request(
       `${API}/${model}:streamGenerateContent?alt=sse`,
-      { method: 'POST', headers: { 'x-goog-api-key': key!, 'Content-Type': 'application/json' } },
+      { method: 'POST', agent, headers: { 'x-goog-api-key': key!, 'Content-Type': 'application/json' } },
       (response) => {
         let buffer = ''
         response.setEncoding('utf8')
@@ -166,17 +184,22 @@ const saveManifest = () =>
 
 async function greenScreen(imageUrl: string, file: string): Promise<{ mimeType: string; data: string }> {
   if (!force && existsSync(file)) return { mimeType: 'image/jpeg', data: (await readFile(file)).toString('base64') }
-  const image = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
-  if (!image.ok) throw new Error(`product image: HTTP ${image.status}`)
+  const image = await retry(async () => {
+    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
+    if (!response.ok) throw new Error(`product image: HTTP ${response.status}`)
+    return response
+  })
   const source = {
     mimeType: image.headers.get('content-type')?.split(';')[0] ?? 'image/jpeg',
     data: Buffer.from(await image.arrayBuffer()).toString('base64'),
   }
-  const { parts } = await gemini(
-    IMAGE_MODEL,
-    [{ inlineData: source }, { text: GREEN_PROMPT }],
-    { responseModalities: ['TEXT', 'IMAGE'] },
-    IMAGE_TIMEOUT,
+  const { parts } = await retry(() =>
+    gemini(
+      IMAGE_MODEL,
+      [{ inlineData: source }, { text: GREEN_PROMPT }],
+      { responseModalities: ['TEXT', 'IMAGE'] },
+      IMAGE_TIMEOUT,
+    ),
   )
   const cutout = parts.find((part) => part.inlineData)?.inlineData
   if (!cutout) throw new Error('image model returned no image')
@@ -186,7 +209,7 @@ async function greenScreen(imageUrl: string, file: string): Promise<{ mimeType: 
 
 async function buildModel(name: string, title: string, cutout: { mimeType: string; data: string }, dir: string) {
   const started = Date.now()
-  const { parts, tokens } = await gemini(
+  const { parts, tokens } = await retry(() => gemini(
     MODEL_IDS[name],
     [{ inlineData: cutout }, { text: SPEC_PROMPT(title) }],
     {
@@ -194,7 +217,7 @@ async function buildModel(name: string, title: string, cutout: { mimeType: strin
       ...(thinking && name === 'neon' ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
     },
     SPEC_TIMEOUT,
-  )
+  ))
   const text = parts.map((part) => part.text ?? '').join('')
   const spec = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as ModelSpec
   await writeFile(path.join(dir, `${name}.json`), JSON.stringify(spec, null, 1))
@@ -209,7 +232,7 @@ async function runProduct(shopTitle: string, id: string) {
   const todo = models.filter((name) => force || !entry[name as 'neon' | 'argon'])
   if (!todo.length) return console.log(`skip  ${shopTitle} / ${entry.title} (done)`)
 
-  const { products } = await lookupCatalog([id], { address_country: 'US' })
+  const { products } = await retry(() => lookupCatalog([id], { address_country: 'US' }))
   const product = products[0]
   const image = (product?.media ?? product?.variants[0]?.media ?? []).find((media) => media.type === 'image')
   if (!product || !image) throw new Error('no live product image')
