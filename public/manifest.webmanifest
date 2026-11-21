@@ -1,0 +1,9 @@
+{
+  "name": "3d-shop",
+  "short_name": "3d-shop",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#e6ddd0",
+  "theme_color": "#e6ddd0"
+}

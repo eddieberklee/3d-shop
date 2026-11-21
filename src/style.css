@@ -3,7 +3,8 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  overscroll-behavior: none;
+  background: #e6ddd0;
 }
 
 #stage {
@@ -11,4 +12,31 @@ body {
   width: 100vw;
   height: 100dvh;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#fullscreen {
+  position: fixed;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #2b2925;
+  background: rgba(239, 232, 219, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 8px rgba(43, 41, 37, 0.22);
+  cursor: pointer;
+}
+
+#fullscreen[hidden],
+:fullscreen #fullscreen {
+  display: none;
 }
