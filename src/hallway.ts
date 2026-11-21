@@ -25,6 +25,8 @@ export interface Hallway {
   /** The camera can move between these z positions. */
   zStart: number
   zEnd: number
+  /** Half the width of the walkable lane, in metres. */
+  laneHalfWidth: number
   /** Number of shops: even indexes are on the left, odd indexes on the right. */
   shopCount: number
   /** Replace a shop's placeholder with an image (for example a generated storefront). */
@@ -256,5 +258,11 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
   }
   requestAnimationFrame(drift)
 
-  return { zStart: -1.5, zEnd: -LENGTH + 6, shopCount: fronts.length, setStorefrontImage }
+  return {
+    zStart: -1.5,
+    zEnd: -LENGTH + 6,
+    laneHalfWidth: WIDTH / 2,
+    shopCount: fronts.length,
+    setStorefrontImage,
+  }
 }

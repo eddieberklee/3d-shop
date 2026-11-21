@@ -1,4 +1,4 @@
-import type * as THREE from 'three/webgpu'
+import { Vector3, type PerspectiveCamera } from 'three/webgpu'
 
 const DEG = Math.PI / 180
 
@@ -6,12 +6,21 @@ const DEG = Math.PI / 180
 const MAX_YAW = 75 * DEG
 const MAX_PITCH_UP = 35 * DEG
 const MAX_PITCH_DOWN = 70 * DEG
-/** A vertical swipe walks only when the camera looks along the hall. */
-const CENTER_YAW = 15 * DEG
 /** Movement before a gesture is read as "look" or "walk", in pixels. */
 const LOCK_DISTANCE = 6
-/** A swipe of one screen height walks this far, in metres. */
-const WALK_PER_SCREEN = 14
+/**
+ * A drag that starts on the lane floor walks when it runs along the lane on
+ * screen. This is the lowest cosine between the drag and the lane direction.
+ */
+const LANE_ALIGNMENT = 0.75
+/** The lane floor can be grabbed up to this distance, in metres. */
+const GRAB_DISTANCE = 45
+/**
+ * Screen pixels for each metre of floor under the finger. The limits keep the
+ * walk speed sensible near the feet and near the horizon.
+ */
+const MIN_PIXELS_PER_METRE = 25
+const MAX_PIXELS_PER_METRE = 60
 /** A swipe across the full screen width turns the view this far. */
 const YAW_PER_SCREEN = 150 * DEG
 /** Metres per second. */
@@ -36,9 +45,9 @@ export interface WalkControls extends Readonly<View> {
 
 export function createWalkControls(
   canvas: HTMLCanvasElement,
-  camera: THREE.PerspectiveCamera,
+  camera: PerspectiveCamera,
   invalidate: () => void,
-  bounds: { zStart: number; zEnd: number },
+  bounds: { zStart: number; zEnd: number; laneHalfWidth: number },
 ): WalkControls {
   /** Where input says the camera must go, and where the camera is now. */
   const target: View = { yaw: 0, pitch: 0, z: bounds.zStart }
@@ -70,7 +79,43 @@ export function createWalkControls(
     y: number
     time: number
     mode: 'look' | 'walk' | null
+    /** Lane direction on screen (unit vector for +z) and its pixels per metre. */
+    laneX: number
+    laneY: number
+    pixelsPerMetre: number
   } | null = null
+
+  const point = new Vector3()
+  const ahead = new Vector3()
+  const toScreen = (v: Vector3) => {
+    v.project(camera)
+    return [(v.x * 0.5 + 0.5) * canvas.clientWidth, (-v.y * 0.5 + 0.5) * canvas.clientHeight]
+  }
+  /**
+   * Find the lane floor under a screen position. On a hit, store how one metre
+   * of the lane runs on screen there, so a drag can move the floor with the finger.
+   */
+  const grabLane = (x: number, y: number): boolean => {
+    if (!pointer) return false
+    camera.updateMatrixWorld()
+    point.set((x / canvas.clientWidth) * 2 - 1, -(y / canvas.clientHeight) * 2 + 1, 0.5)
+    point.unproject(camera).sub(camera.position).normalize()
+    if (point.y > -0.02) return false
+    const distance = -camera.position.y / point.y
+    if (distance > GRAB_DISTANCE) return false
+    point.multiplyScalar(distance).add(camera.position)
+    if (Math.abs(point.x) > bounds.laneHalfWidth) return false
+
+    ahead.copy(point).setZ(point.z + 1)
+    const [x0, y0] = toScreen(point)
+    const [x1, y1] = toScreen(ahead)
+    const length = Math.hypot(x1 - x0, y1 - y0)
+    if (!(length > 0.5)) return false
+    pointer.laneX = (x1 - x0) / length
+    pointer.laneY = (y1 - y0) / length
+    pointer.pixelsPerMetre = clamp(length, MIN_PIXELS_PER_METRE, MAX_PIXELS_PER_METRE)
+    return true
+  }
 
   // The loop runs only while the camera still moves, then stops.
   const tick = (time: number) => {
@@ -129,6 +174,9 @@ export function createWalkControls(
       y: event.clientY,
       time: event.timeStamp,
       mode: null,
+      laneX: 0,
+      laneY: 1,
+      pixelsPerMetre: MIN_PIXELS_PER_METRE,
     }
     try {
       canvas.setPointerCapture(event.pointerId)
@@ -147,11 +195,15 @@ export function createWalkControls(
     pointer.time = event.timeStamp
 
     if (!pointer.mode) {
-      const totalX = Math.abs(event.clientX - pointer.startX)
-      const totalY = Math.abs(event.clientY - pointer.startY)
-      if (Math.hypot(totalX, totalY) < LOCK_DISTANCE) return
-      const vertical = totalY > totalX * 1.2
-      pointer.mode = vertical && Math.abs(target.yaw) < CENTER_YAW ? 'walk' : 'look'
+      const totalX = event.clientX - pointer.startX
+      const totalY = event.clientY - pointer.startY
+      const total = Math.hypot(totalX, totalY)
+      if (total < LOCK_DISTANCE) return
+      // Walk: the drag starts on the lane floor and runs along the lane, at any view angle.
+      const alongLane =
+        grabLane(pointer.startX, pointer.startY) &&
+        Math.abs(totalX * pointer.laneX + totalY * pointer.laneY) / total >= LANE_ALIGNMENT
+      pointer.mode = alongLane ? 'walk' : 'look'
     }
 
     // Each move also updates a smoothed speed, which becomes momentum on release.
@@ -159,8 +211,10 @@ export function createWalkControls(
       clamp(old * 0.6 + (step / dt) * 0.4, -max, max)
 
     if (pointer.mode === 'walk') {
-      // Swipe down pulls the floor toward you: the camera moves forward (-z).
-      const metres = (-dy / canvas.clientHeight) * WALK_PER_SCREEN
+      // The floor follows the finger: pull it toward you and the camera moves forward (-z).
+      // When the finger leaves the floor, the last lane direction stays in use.
+      grabLane(event.clientX, event.clientY)
+      const metres = -(dx * pointer.laneX + dy * pointer.laneY) / pointer.pixelsPerMetre
       target.z += metres
       velocity.z = blend(velocity.z, metres, MAX_WALK_SPEED)
     } else {
