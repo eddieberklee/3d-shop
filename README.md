@@ -14,7 +14,7 @@ A web app that is one full-screen, physically based 3D scene: an open-air mall w
 
 - [three.js](https://threejs.org) `WebGPURenderer`: WebGPU where the browser has it, WebGL 2 otherwise.
 - Vite and TypeScript. No UI framework.
-- Rendering is on demand: a frame is drawn only when something changes.
+- Rendering is on demand, plus a 30 fps redraw for the cloud drift. A hidden tab draws nothing.
 
 ## Shop data
 

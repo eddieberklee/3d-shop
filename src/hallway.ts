@@ -15,6 +15,10 @@ const HAZE = 0xe6ddd0
 const SUN_ELEVATION = 48
 const SUN_AZIMUTH = 28
 const SUN_INTENSITY = 2.2
+/** The sky shader's drift rate. This value moves a cloud across the view in about a minute. */
+const CLOUD_SPEED = 0.00003
+/** Frames per second for cloud motion while nothing else moves. */
+const CLOUD_FPS = 30
 const ENVIRONMENT_INTENSITY = 0.18
 
 export interface Hallway {
@@ -136,6 +140,7 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
   sky.mieCoefficient.value = 0.004
   sky.mieDirectionalG.value = 0.85
   sky.cloudCoverage.value = 0.25
+  sky.cloudSpeed.value = CLOUD_SPEED
   sky.sunPosition.value.copy(sun)
   camera.far = 2000
   camera.updateProjectionMatrix()
@@ -239,6 +244,17 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
     })
   }
 
-  invalidate()
+  // The clouds drift without end, so the scene redraws at a low, steady rate.
+  // requestAnimationFrame stops in a hidden tab, so a hidden page costs nothing.
+  let lastCloudFrame = 0
+  const drift = (time: number) => {
+    if (time - lastCloudFrame >= 1000 / CLOUD_FPS - 1) {
+      lastCloudFrame = time
+      invalidate()
+    }
+    requestAnimationFrame(drift)
+  }
+  requestAnimationFrame(drift)
+
   return { zStart: -1.5, zEnd: -LENGTH + 6, shopCount: fronts.length, setStorefrontImage }
 }
