@@ -29,3 +29,6 @@ dist-ssr
 # Cloudflare
 .wrangler
 .dev.vars*
+
+# Generated product models and images (made by scripts/generate-models.mts)
+public/generated
