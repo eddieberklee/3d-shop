@@ -9,6 +9,7 @@
     "check": "tsc && vite build"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "typescript": "~7.0.2",
     "vite": "^8.3.6"
   },

@@ -60,7 +60,7 @@ export function createJourney(
   const fade = (opacity: number) => (ui.fade.style.opacity = String(opacity))
 
   const showRoom = (shop: number) => {
-    room.setShop(shop)
+    room.setShop(hallway.shopSign(shop))
     hallway.group.visible = false
     room.group.visible = true
     ui.back.hidden = false

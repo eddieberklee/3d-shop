@@ -7,3 +7,5 @@
 - Scene: `src/hallway.ts` builds the hall; `setStorefrontImage(shop, url)` puts an image on a shop front. `src/controls.ts` owns the camera (look limits, drag-the-lane-floor to walk, easing and momentum).
 - Shops: `src/journey.ts` runs the tap, enter and exit animation; `src/shopRoom.ts` builds the one shared shop room. Control modes are `hall`, `shop` and `cinematic` (`src/controls.ts`).
 - Dev-only URL parameters for visual checks: `?view=z,yaw,pitch`, `?shop=7&yaw=90`, `?door=7,0.6`, `?tap=x,y`.
+- Shops and their shelf products are fixed in `src/shopList.ts` (same shops, same order, each visit). Do not replace it with a live search. Dev-server endpoints are Vite plugins in `server/`.
+- Secrets: `.env.local` (git-ignored) holds `GEMINI_API_KEY`. Read it only in `server/` or `scripts/`, never in `src/`, and never print it.

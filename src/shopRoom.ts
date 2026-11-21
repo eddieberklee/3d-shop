@@ -1,5 +1,13 @@
 import * as THREE from 'three/webgpu'
-import { DOOR_HEIGHT, DOOR_PANEL_WIDTH, canvasTexture, oakTexture, shojiTexture } from './hallway'
+import {
+  DOOR_HEIGHT,
+  DOOR_PANEL_WIDTH,
+  type ShopSign,
+  canvasTexture,
+  drawSign,
+  oakTexture,
+  shojiTexture,
+} from './hallway'
 import type { Stage } from './stage'
 
 /** Metres. The room is square; the camera stands at its centre. */
@@ -16,24 +24,30 @@ export interface ShopRoom {
   /** Tap targets that leave the shop (the door). */
   exitTargets: THREE.Object3D[]
   /** Show which shop this room is. */
-  setShop: (shop: number) => void
+  setShop: (sign: ShopSign) => void
 }
 
 /** A wall display: a title over empty oak shelves. Products go here later. */
-function displayTexture(title: string, note: string): THREE.CanvasTexture {
+function displayTexture(title: string, note: string, sign?: ShopSign): THREE.CanvasTexture {
   return canvasTexture(1024, 512, (g) => {
     g.fillStyle = '#e4dccd'
     g.fillRect(0, 0, 1024, 512)
-    g.fillStyle = '#2b2925'
-    g.textAlign = 'center'
-    g.textBaseline = 'middle'
-    g.font = '300 54px "Helvetica Neue", system-ui, sans-serif'
-    g.letterSpacing = '12px'
-    g.fillText(title, 512, 70)
-    g.font = '300 24px "Helvetica Neue", system-ui, sans-serif'
-    g.letterSpacing = '4px'
-    g.fillStyle = 'rgba(43,41,37,0.55)'
-    g.fillText(note, 512, 124)
+    if (sign) {
+      // The shop's own sign: logo above its name.
+      drawSign(g, sign, 512, 14, 190, 820)
+    } else {
+      g.fillStyle = '#2b2925'
+      g.textAlign = 'center'
+      g.textBaseline = 'middle'
+      g.font = '300 54px "Helvetica Neue", system-ui, sans-serif'
+      g.letterSpacing = '12px'
+      g.fillText(title, 512, 70)
+      g.font = '300 24px "Helvetica Neue", system-ui, sans-serif'
+      g.letterSpacing = '4px'
+      g.fillStyle = 'rgba(43,41,37,0.55)'
+      g.fillText(note, 512, 124)
+      g.letterSpacing = '0px'
+    }
     for (let row = 0; row < 3; row++) {
       const y = 250 + row * 105
       g.fillStyle = '#a97f52'
@@ -151,10 +165,9 @@ export function buildShopRoom({ scene }: Stage, center: THREE.Vector3): ShopRoom
     room.add(beam)
   }
 
-  const setShop = (shop: number) => {
-    const name = `SHOP ${String(shop + 1).padStart(2, '0')}`
+  const setShop = (sign: ShopSign) => {
     titlePanels[0].map?.dispose()
-    titlePanels[0].map = displayTexture(name, 'NEW IN')
+    titlePanels[0].map = displayTexture(sign.title, '', sign)
     titlePanels[0].needsUpdate = true
   }
 

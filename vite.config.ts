@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
+import { shopLogo } from './server/shopLogo.ts'
 
 export default defineConfig({
+  plugins: [shopLogo()],
   resolve: {
     // three's addons import 'three'. Point it at the WebGPU build so the app
     // holds one copy of the library.

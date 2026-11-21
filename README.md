@@ -21,6 +21,8 @@ A web app that is one full-screen, physically based 3D scene: an open-air mall w
 
 `src/shop.ts` calls [Shop MCP](https://shop.dev/docs/index.md) (`https://mcp.shop.com/`) directly from the browser. No account or API key is necessary.
 
+- `src/shopList.ts` fixes which 28 shops stand in the hall, their order, and the six products on each shop's shelves. Names, prices and images still come live from Shop MCP.
+- `server/shopLogo.ts` (dev server) finds each shop's site icon; the browser loads it from the shop's own server.
 - `searchCatalog`, `lookupCatalog`, `getProduct`: products, prices, images and sellers from all Shopify merchants.
 - `createCheckout`, `getCheckout`: a real checkout at one merchant. The shopper pays on its `continue_url`.
 

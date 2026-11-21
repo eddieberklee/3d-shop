@@ -3,6 +3,7 @@ import { Vector3 } from 'three/webgpu'
 import { createWalkControls } from './controls'
 import { buildHallway } from './hallway'
 import { createJourney } from './journey'
+import { SHOPS } from './shopList'
 import { buildShopRoom } from './shopRoom'
 import { createStage } from './stage'
 
@@ -27,6 +28,16 @@ const journey = createJourney(stage, controls, hallway, room, {
 // Full screen: a button and the F key where the browser has the Fullscreen API
 // (desktop, Android, iPad). Esc leaves it. iPhone Safari has no such API: there,
 // "Add to Home Screen" opens the app with no browser bars.
+// Real shops, in a fixed order. Each name goes up at once; each logo is found
+// live on the shop's own site and added when it loads.
+SHOPS.slice(0, hallway.shopCount).forEach((shop, index) => {
+  hallway.setStorefront(index, shop.title)
+  fetch(`/api/shop-logo?url=${encodeURIComponent(shop.url)}`)
+    .then((response) => response.json())
+    .then(({ url }: { url: string | null }) => url && hallway.setStorefront(index, shop.title, url))
+    .catch(() => {})
+})
+
 if (document.fullscreenEnabled) {
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen()

@@ -41,6 +41,9 @@ export interface Hallway {
   shopPose: (shop: number) => { z: number; side: -1 | 1 }
   /** Slide a shop's doors: 0 is closed, 1 is open. */
   setDoorOpen: (shop: number, amount: number) => void
+  /** Put a shop's name on its front, and its logo above the name when `logoUrl` loads. */
+  setStorefront: (shop: number, title: string, logoUrl?: string | null) => void
+  shopSign: (shop: number) => ShopSign
   /** Replace a shop's placeholder with an image (for example a generated storefront). */
   setStorefrontImage: (shop: number, url: string) => void
 }
@@ -121,20 +124,55 @@ export function shojiTexture(): THREE.CanvasTexture {
 /** Muted earth tones for the placeholder shop fronts. */
 const NOREN = ['#a8ad98', '#c4a58c', '#d9cfbd', '#8e9aa0', '#b7b0a1', '#9c8f7e', '#c9b9a0', '#7f8b7a']
 
-/** Placeholder storefront: an oak sign band above a linen-toned window. */
-function placeholderTexture(shop: number): THREE.CanvasTexture {
-  return canvasTexture(1024, 716, (g) => {
-    const name = `SHOP ${String(shop + 1).padStart(2, '0')}`
+const SIGN_FONT = '"Helvetica Neue", system-ui, sans-serif'
+const INK = '#2b2925'
 
+/** What a shop shows on its sign: a title, and a logo image when one loaded. */
+export interface ShopSign {
+  title: string
+  logo?: HTMLImageElement
+}
+
+/**
+ * Draw a sign: the logo (when there is one) above the title, both centred on
+ * `centerX`. The title shrinks until it fits `maxWidth`.
+ */
+export function drawSign(
+  g: CanvasRenderingContext2D,
+  sign: ShopSign,
+  centerX: number,
+  top: number,
+  height: number,
+  maxWidth: number,
+) {
+  const { title, logo } = sign
+  const logoHeight = logo ? height * 0.46 : 0
+  if (logo) {
+    const scale = Math.min(logoHeight / logo.naturalHeight, (maxWidth * 0.4) / logo.naturalWidth)
+    const width = logo.naturalWidth * scale
+    const drawn = logo.naturalHeight * scale
+    g.drawImage(logo, centerX - width / 2, top + height * 0.06 + (logoHeight - drawn) / 2, width, drawn)
+  }
+  let size = logo ? height * 0.27 : height * 0.36
+  g.fillStyle = INK
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  const text = title.toUpperCase()
+  do {
+    g.font = `300 ${size}px ${SIGN_FONT}`
+    g.letterSpacing = `${size * 0.22}px`
+    size -= 2
+  } while (g.measureText(text).width > maxWidth && size > 12)
+  g.fillText(text, centerX, logo ? top + height * 0.76 : top + height * 0.52)
+  g.letterSpacing = '0px'
+}
+
+/** A storefront: a sign band above a paper-screen window. */
+function storefrontTexture(shop: number, sign: ShopSign): THREE.CanvasTexture {
+  return canvasTexture(1024, 716, (g) => {
     g.fillStyle = '#efe8db'
     g.fillRect(0, 0, 1024, 716)
-
-    g.fillStyle = '#2b2925'
-    g.font = '300 58px "Helvetica Neue", system-ui, sans-serif'
-    g.textAlign = 'center'
-    g.textBaseline = 'middle'
-    g.letterSpacing = '14px'
-    g.fillText(name, 512, 84)
+    drawSign(g, sign, 512, 0, 160, 880)
 
     // The window: a recessed opening with a thin dark frame and a paper screen grid.
     g.fillStyle = '#2b2925'
@@ -256,10 +294,16 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
   const frontGeometry = new THREE.PlaneGeometry(FRONT_WIDTH, FRONT_HEIGHT)
   const fronts: THREE.MeshStandardMaterial[] = []
   const frontMeshes: THREE.Mesh[] = []
+  const signs: ShopSign[] = []
   for (let shop = 0; shop < BAYS_PER_SIDE * 2; shop++) {
     const side = shop % 2 === 0 ? -1 : 1
     const bay = Math.floor(shop / 2)
-    const material = new THREE.MeshStandardMaterial({ map: placeholderTexture(shop), roughness: 0.9 })
+    const sign: ShopSign = { title: `Shop ${String(shop + 1).padStart(2, '0')}` }
+    signs.push(sign)
+    const material = new THREE.MeshStandardMaterial({
+      map: storefrontTexture(shop, sign),
+      roughness: 0.9,
+    })
     const front = new THREE.Mesh(frontGeometry, material)
     front.name = `shop-${shop}`
     front.userData.shop = shop
@@ -310,6 +354,29 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
     return typeof hit.object.userData.shop === 'number' ? hit.object.userData.shop : null
   }
 
+  const redrawFront = (shop: number) => {
+    const material = fronts[shop]
+    material.map?.dispose()
+    material.map = storefrontTexture(shop, signs[shop])
+    material.needsUpdate = true
+    invalidate()
+  }
+  const setStorefront = (shop: number, title: string, logoUrl?: string | null) => {
+    if (!fronts[shop]) return
+    signs[shop] = { title }
+    redrawFront(shop)
+    if (!logoUrl) return
+    // The logo comes straight from the shop's own server. It needs CORS to go on a canvas.
+    const logo = new Image()
+    logo.crossOrigin = 'anonymous'
+    logo.onload = () => {
+      if (signs[shop].title !== title || logo.naturalWidth === 0) return
+      signs[shop] = { title, logo }
+      redrawFront(shop)
+    }
+    logo.src = logoUrl
+  }
+
   const loader = new THREE.TextureLoader()
   const setStorefrontImage = (shop: number, url: string) => {
     const material = fronts[shop]
@@ -346,6 +413,8 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
     shopAt,
     shopPose,
     setDoorOpen,
+    setStorefront,
+    shopSign: (shop: number) => signs[shop],
     setStorefrontImage,
   }
 }
