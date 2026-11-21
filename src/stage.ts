@@ -30,7 +30,6 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   renderer.toneMapping = THREE.AgXToneMapping
   renderer.toneMappingExposure = 1
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200)
