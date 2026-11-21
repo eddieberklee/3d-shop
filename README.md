@@ -8,6 +8,15 @@ A web app that is one full-screen, physically based 3D scene. The scene is empty
 - Vite and TypeScript. No UI framework.
 - Rendering is on demand: a frame is drawn only when something changes.
 
+## Shop data
+
+`src/shop.ts` calls [Shop MCP](https://shop.dev/docs/index.md) (`https://mcp.shop.com/`) directly from the browser. No account or API key is necessary.
+
+- `searchCatalog`, `lookupCatalog`, `getProduct`: products, prices, images and sellers from all Shopify merchants.
+- `createCheckout`, `getCheckout`: a real checkout at one merchant. The shopper pays on its `continue_url`.
+
+`.mcp.json` registers the same server for coding agents.
+
 ## Commands
 
 - `npm install`
