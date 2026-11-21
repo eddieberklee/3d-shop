@@ -25,3 +25,7 @@ dist-ssr
 
 # Product click counts (server/productClicks.ts)
 .data
+
+# Cloudflare
+.wrangler
+.dev.vars*

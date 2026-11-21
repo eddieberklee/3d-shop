@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The deployed site: `npm run deploy`. The page is the Vite build in `dist`;
+  // only `/api/*` runs the Worker (`worker/index.ts`).
+  "name": "3d-shop",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "404-page"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "3d-shop",
+      "database_id": "076e4227-92d1-4207-b6ae-dae0e5fd874f",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+}

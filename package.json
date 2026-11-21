@@ -6,12 +6,15 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "check": "tsc && vite build"
+    "check": "tsc && tsc -p worker && vite build",
+    "deploy": "npm run check && wrangler d1 migrations apply 3d-shop --remote && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261121.1",
     "@types/node": "^26.6.6",
     "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "wrangler": "^4.129.0"
   },
   "dependencies": {
     "@types/three": "^0.187.0",
