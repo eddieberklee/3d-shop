@@ -10,6 +10,9 @@ const BAYS_PER_SIDE = 14
 const LENGTH = BAY * BAYS_PER_SIDE
 const FRONT_WIDTH = 6
 const FRONT_HEIGHT = 4.2
+/** One sliding door panel. Each shop has two. */
+export const DOOR_PANEL_WIDTH = 1.15
+export const DOOR_HEIGHT = 2.7
 const HAZE = 0xe6ddd0
 /** Degrees above the horizon, and degrees around from the hall axis. */
 const SUN_ELEVATION = 48
@@ -29,11 +32,20 @@ export interface Hallway {
   laneHalfWidth: number
   /** Number of shops: even indexes are on the left, odd indexes on the right. */
   shopCount: number
+  /** Hide or show the whole hall (it is hidden while the camera is in a shop). */
+  group: THREE.Group
+  /** Objects a tap can hit. Give a raycaster hit to `shopAt` to get the shop. */
+  tapTargets: THREE.Object3D[]
+  shopAt: (hit: THREE.Intersection) => number | null
+  /** Where a shop's door is: its z position and its side (-1 left, 1 right). */
+  shopPose: (shop: number) => { z: number; side: -1 | 1 }
+  /** Slide a shop's doors: 0 is closed, 1 is open. */
+  setDoorOpen: (shop: number, amount: number) => void
   /** Replace a shop's placeholder with an image (for example a generated storefront). */
   setStorefrontImage: (shop: number, url: string) => void
 }
 
-function canvasTexture(width: number, height: number, draw: (g: CanvasRenderingContext2D) => void) {
+export function canvasTexture(width: number, height: number, draw: (g: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -64,7 +76,7 @@ function paverTexture(): THREE.CanvasTexture {
 }
 
 /** Pale oak with a vertical grain. */
-function oakTexture(): THREE.CanvasTexture {
+export function oakTexture(): THREE.CanvasTexture {
   const texture = canvasTexture(256, 1024, (g) => {
     g.fillStyle = '#b98d5c'
     g.fillRect(0, 0, 256, 1024)
@@ -80,6 +92,30 @@ function oakTexture(): THREE.CanvasTexture {
   })
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
   return texture
+}
+
+/** A shoji door panel: an oak frame with a paper grid. */
+export function shojiTexture(): THREE.CanvasTexture {
+  return canvasTexture(256, 600, (g) => {
+    g.fillStyle = '#a97f52'
+    g.fillRect(0, 0, 256, 600)
+    g.fillStyle = '#f3ecdf'
+    g.fillRect(14, 14, 228, 572)
+    g.strokeStyle = '#a97f52'
+    g.lineWidth = 5
+    for (let i = 1; i < 3; i++) {
+      g.beginPath()
+      g.moveTo(14 + (228 * i) / 3, 14)
+      g.lineTo(14 + (228 * i) / 3, 586)
+      g.stroke()
+    }
+    for (let i = 1; i < 6; i++) {
+      g.beginPath()
+      g.moveTo(14, 14 + (572 * i) / 6)
+      g.lineTo(242, 14 + (572 * i) / 6)
+      g.stroke()
+    }
+  })
 }
 
 /** Muted earth tones for the placeholder shop fronts. */
@@ -219,17 +255,59 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
   // Storefronts: one image plane for each shop.
   const frontGeometry = new THREE.PlaneGeometry(FRONT_WIDTH, FRONT_HEIGHT)
   const fronts: THREE.MeshStandardMaterial[] = []
+  const frontMeshes: THREE.Mesh[] = []
   for (let shop = 0; shop < BAYS_PER_SIDE * 2; shop++) {
     const side = shop % 2 === 0 ? -1 : 1
     const bay = Math.floor(shop / 2)
     const material = new THREE.MeshStandardMaterial({ map: placeholderTexture(shop), roughness: 0.9 })
     const front = new THREE.Mesh(frontGeometry, material)
     front.name = `shop-${shop}`
+    front.userData.shop = shop
+    frontMeshes.push(front)
     front.rotation.y = -side * (Math.PI / 2)
     front.position.set(side * (WIDTH / 2 - 0.02), FRONT_HEIGHT / 2, -(bay + 0.5) * BAY)
     front.receiveShadow = true
     hall.add(front)
     fronts.push(material)
+  }
+
+  // Sliding shoji doors (two panels for each shop) and the lit doorway behind them.
+  const shopCount = fronts.length
+  const shopPose = (shop: number) => ({
+    z: -(Math.floor(shop / 2) + 0.5) * BAY,
+    side: (shop % 2 === 0 ? -1 : 1) as -1 | 1,
+  })
+  const doors = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.05, DOOR_HEIGHT, DOOR_PANEL_WIDTH),
+    new THREE.MeshStandardMaterial({ map: shojiTexture(), roughness: 0.8 }),
+    shopCount * 2,
+  )
+  doors.castShadow = doors.receiveShadow = true
+  const doorways = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.01, DOOR_HEIGHT, DOOR_PANEL_WIDTH * 2),
+    new THREE.MeshBasicMaterial({ color: 0xfff3dd }),
+    shopCount,
+  )
+  const setDoorOpen = (shop: number, amount: number) => {
+    const { z, side } = shopPose(shop)
+    const slide = DOOR_PANEL_WIDTH / 2 + amount * DOOR_PANEL_WIDTH
+    const x = side * (WIDTH / 2 - 0.07)
+    doors.setMatrixAt(shop * 2, matrix.makeTranslation(x, DOOR_HEIGHT / 2, z - slide))
+    doors.setMatrixAt(shop * 2 + 1, matrix.makeTranslation(x, DOOR_HEIGHT / 2, z + slide))
+    doors.instanceMatrix.needsUpdate = true
+    invalidate()
+  }
+  for (let shop = 0; shop < shopCount; shop++) {
+    const { z, side } = shopPose(shop)
+    doorways.setMatrixAt(shop, matrix.makeTranslation(side * (WIDTH / 2 - 0.035), DOOR_HEIGHT / 2, z))
+    setDoorOpen(shop, 0)
+  }
+  hall.add(doors, doorways)
+
+  const shopAt = (hit: THREE.Intersection): number | null => {
+    if (hit.object === doors && hit.instanceId !== undefined) return Math.floor(hit.instanceId / 2)
+    if (hit.object === doorways && hit.instanceId !== undefined) return hit.instanceId
+    return typeof hit.object.userData.shop === 'number' ? hit.object.userData.shop : null
   }
 
   const loader = new THREE.TextureLoader()
@@ -262,7 +340,12 @@ export function buildHallway({ scene, renderer, camera, invalidate }: Stage): Ha
     zStart: -1.5,
     zEnd: -LENGTH + 6,
     laneHalfWidth: WIDTH / 2,
-    shopCount: fronts.length,
+    shopCount,
+    group: hall,
+    tapTargets: [...frontMeshes, doors, doorways],
+    shopAt,
+    shopPose,
+    setDoorOpen,
     setStorefrontImage,
   }
 }

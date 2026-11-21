@@ -1,6 +1,9 @@
 import './style.css'
+import { Vector3 } from 'three/webgpu'
 import { createWalkControls } from './controls'
 import { buildHallway } from './hallway'
+import { createJourney } from './journey'
+import { buildShopRoom } from './shopRoom'
 import { createStage } from './stage'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!
@@ -14,6 +17,12 @@ stage.camera.updateProjectionMatrix()
 
 const hallway = buildHallway(stage)
 const controls = createWalkControls(canvas, stage.camera, stage.invalidate, hallway)
+// The shop room stands where the hall is; only one of the two is visible at a time.
+const room = buildShopRoom(stage, new Vector3(0, 0, (hallway.zStart + hallway.zEnd) / 2))
+const journey = createJourney(stage, controls, hallway, room, {
+  fade: document.querySelector<HTMLElement>('#fade')!,
+  back: document.querySelector<HTMLButtonElement>('#back')!,
+})
 
 // Full screen: a button and the F key where the browser has the Fullscreen API
 // (desktop, Android, iPad). Esc leaves it. iPhone Safari has no such API: there,
@@ -32,10 +41,22 @@ if (document.fullscreenEnabled) {
 }
 
 if (import.meta.env.DEV) {
-  Object.assign(window, { stage, hallway, controls })
+  Object.assign(window, { stage, hallway, controls, room, journey })
   // `?view=z,yawDegrees,pitchDegrees` opens the page at that view, for visual checks.
   const view = new URLSearchParams(location.search).get('view')?.split(',').map(Number)
   if (view?.length === 3 && view.every(Number.isFinite)) {
     controls.set({ z: view[0], yaw: (view[1] * Math.PI) / 180, pitch: (view[2] * Math.PI) / 180 })
   }
+  // `?shop=7` opens the page inside that shop; `&yaw=90` turns the view there.
+  const params = new URLSearchParams(location.search)
+  if (params.has('shop')) {
+    await journey.enterShop(Number(params.get('shop')), true)
+    controls.set({ yaw: (Number(params.get('yaw') ?? 0) * Math.PI) / 180 })
+  }
+  // `?tap=x,y` sends a tap at that screen position, to check the full animation.
+  const tap = params.get('tap')?.split(',').map(Number)
+  if (tap?.length === 2) controls.onTap?.(tap[0], tap[1])
+  // `?door=7,0.6` slides that shop's doors, to check the door animation.
+  const door = params.get('door')?.split(',').map(Number)
+  if (door?.length === 2) hallway.setDoorOpen(door[0], door[1])
 }

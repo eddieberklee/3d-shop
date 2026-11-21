@@ -7,6 +7,7 @@ A web app that is one full-screen, physically based 3D scene: an open-air mall w
 - Swipe left or right: look around (limit 75° each side; one full-width swipe turns 150°).
 - Swipe up or down off the lane floor, or across the lane: look up or down (you cannot look straight down).
 - Drag on the lane floor, along the lane: walk. The floor follows your finger at any view angle (pull it toward you to go forward).
+- Tap a shop front: you walk to it, its doors slide open, and you go in. In the shop you can look all the way around but not walk. Tap the door, the back button or `Esc` to leave.
 - Full screen: the corner button or `F` (desktop, Android, iPad). On iPhone, use Share → Add to Home Screen.
 - Desktop: drag, scroll wheel, or `W` `A` `S` `D` and the arrow keys.
 

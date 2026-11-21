@@ -34,13 +34,25 @@ const TURN_FRICTION = 6
 const TURN_MOMENTUM = 0.35
 /** Easing rate: a higher value makes the camera follow its target more tightly. */
 const EASE = 14
+/** A press shorter than this, with no drag, is a tap. Milliseconds. */
+const TAP_TIME = 400
 const EYE_HEIGHT = 1.6
 
-type View = { yaw: number; pitch: number; z: number }
+export type View = { yaw: number; pitch: number; z: number; x: number }
+
+/**
+ * - `hall`: look within the limits, walk along the lane.
+ * - `shop`: look all the way around, no walking.
+ * - `cinematic`: input is off and no limits apply; code moves the camera with `set`.
+ */
+export type ControlMode = 'hall' | 'shop' | 'cinematic'
 
 export interface WalkControls extends Readonly<View> {
-  /** Jump to a view. Angles are radians; values past the limits are clamped. */
+  /** Jump to a view. Angles are radians; values past the mode's limits are clamped. */
   set: (view: Partial<View>) => void
+  setMode: (mode: ControlMode) => void
+  /** Called for a tap (a short press with no drag), with its screen position. */
+  onTap: ((x: number, y: number) => void) | null
 }
 
 export function createWalkControls(
@@ -50,24 +62,27 @@ export function createWalkControls(
   bounds: { zStart: number; zEnd: number; laneHalfWidth: number },
 ): WalkControls {
   /** Where input says the camera must go, and where the camera is now. */
-  const target: View = { yaw: 0, pitch: 0, z: bounds.zStart }
+  const target: View = { yaw: 0, pitch: 0, z: bounds.zStart, x: 0 }
   const current: View = { ...target }
   /** Momentum, in units per second. It moves the target after the finger lifts. */
-  const velocity: View = { yaw: 0, pitch: 0, z: 0 }
+  const velocity = { yaw: 0, pitch: 0, z: 0 }
+  let mode: ControlMode = 'hall'
   let frame = 0
   let lastTime = 0
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
   const clampTarget = () => {
-    target.yaw = clamp(target.yaw, -MAX_YAW, MAX_YAW)
+    if (mode === 'cinematic') return
     target.pitch = clamp(target.pitch, -MAX_PITCH_DOWN, MAX_PITCH_UP)
+    if (mode !== 'hall') return
+    target.yaw = clamp(target.yaw, -MAX_YAW, MAX_YAW)
     target.z = clamp(target.z, bounds.zEnd, bounds.zStart)
   }
 
   const render = () => {
     camera.rotation.set(current.pitch, current.yaw, 0, 'YXZ')
-    camera.position.set(0, EYE_HEIGHT, current.z)
+    camera.position.set(current.x, EYE_HEIGHT, current.z)
     invalidate()
   }
 
@@ -78,6 +93,7 @@ export function createWalkControls(
     x: number
     y: number
     time: number
+    downTime: number
     mode: 'look' | 'walk' | null
     /** Lane direction on screen (unit vector for +z) and its pixels per metre. */
     laneX: number
@@ -123,6 +139,7 @@ export function createWalkControls(
     const dt = Math.min(Math.max(time - lastTime, 0) / 1000, 0.05)
     lastTime = time
 
+    if (mode !== 'hall') velocity.z = 0
     if (!pointer) {
       target.yaw += velocity.yaw * dt
       target.pitch += velocity.pitch * dt
@@ -134,9 +151,10 @@ export function createWalkControls(
     }
     clampTarget()
     // Momentum stops at a limit; the easing below gives a soft arrival.
-    if (Math.abs(target.yaw) === MAX_YAW) velocity.yaw = 0
+    if (mode === 'hall' && Math.abs(target.yaw) === MAX_YAW) velocity.yaw = 0
     if (target.pitch === MAX_PITCH_UP || target.pitch === -MAX_PITCH_DOWN) velocity.pitch = 0
     if (target.z === bounds.zStart || target.z === bounds.zEnd) velocity.z = 0
+    current.x = target.x
 
     const ease = 1 - Math.exp(-EASE * dt)
     current.yaw += (target.yaw - current.yaw) * ease
@@ -163,7 +181,7 @@ export function createWalkControls(
   }
 
   canvas.addEventListener('pointerdown', (event) => {
-    if (pointer) return
+    if (pointer || mode === 'cinematic') return
     // A touch catches the camera: momentum stops.
     velocity.yaw = velocity.pitch = velocity.z = 0
     pointer = {
@@ -173,6 +191,7 @@ export function createWalkControls(
       x: event.clientX,
       y: event.clientY,
       time: event.timeStamp,
+      downTime: event.timeStamp,
       mode: null,
       laneX: 0,
       laneY: 1,
@@ -201,6 +220,7 @@ export function createWalkControls(
       if (total < LOCK_DISTANCE) return
       // Walk: the drag starts on the lane floor and runs along the lane, at any view angle.
       const alongLane =
+        mode === 'hall' &&
         grabLane(pointer.startX, pointer.startY) &&
         Math.abs(totalX * pointer.laneX + totalY * pointer.laneY) / total >= LANE_ALIGNMENT
       pointer.mode = alongLane ? 'walk' : 'look'
@@ -238,8 +258,11 @@ export function createWalkControls(
     }
     velocity.yaw *= TURN_MOMENTUM
     velocity.pitch *= TURN_MOMENTUM
+    const tapped =
+      event.type === 'pointerup' && !pointer.mode && event.timeStamp - pointer.downTime < TAP_TIME
     pointer = null
     wake()
+    if (tapped) controls.onTap?.(event.clientX, event.clientY)
   }
   canvas.addEventListener('pointerup', release)
   canvas.addEventListener('pointercancel', release)
@@ -249,6 +272,7 @@ export function createWalkControls(
     'wheel',
     (event) => {
       event.preventDefault()
+      if (mode !== 'hall') return
       velocity.z = clamp(velocity.z + event.deltaY * 0.02, -MAX_WALK_SPEED, MAX_WALK_SPEED)
       wake()
     },
@@ -256,6 +280,7 @@ export function createWalkControls(
   )
 
   window.addEventListener('keydown', (event) => {
+    if (mode === 'cinematic') return
     const key = event.key.toLowerCase()
     const push = (amount: number) => clamp(velocity.z + amount, -MAX_WALK_SPEED, MAX_WALK_SPEED)
     if (key === 'arrowup' || key === 'w') velocity.z = push(-3)
@@ -267,8 +292,7 @@ export function createWalkControls(
     wake()
   })
 
-  render()
-  return Object.assign(current, {
+  const controls: WalkControls = Object.assign(current, {
     set: (view: Partial<View>) => {
       velocity.yaw = velocity.pitch = velocity.z = 0
       Object.assign(target, view)
@@ -276,5 +300,15 @@ export function createWalkControls(
       Object.assign(current, target)
       render()
     },
+    setMode: (next: ControlMode) => {
+      mode = next
+      velocity.yaw = velocity.pitch = velocity.z = 0
+      if (next === 'cinematic') pointer = null
+      clampTarget()
+      wake()
+    },
+    onTap: null,
   })
+  render()
+  return controls
 }

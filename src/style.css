@@ -17,7 +17,8 @@ body {
   -webkit-touch-callout: none;
 }
 
-#fullscreen {
+#fullscreen,
+#back {
   position: fixed;
   right: calc(14px + env(safe-area-inset-right));
   bottom: calc(14px + env(safe-area-inset-bottom));
@@ -36,6 +37,23 @@ body {
   cursor: pointer;
 }
 
+#back {
+  top: calc(14px + env(safe-area-inset-top));
+  right: auto;
+  bottom: auto;
+  left: calc(14px + env(safe-area-inset-left));
+}
+
+/* The warm light that covers the view as the camera goes through a door. */
+#fade {
+  position: fixed;
+  inset: 0;
+  background: #fff6e6;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#back[hidden],
 #fullscreen[hidden],
 :fullscreen #fullscreen {
   display: none;
